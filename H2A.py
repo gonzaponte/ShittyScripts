@@ -12,7 +12,7 @@ F = TFile(argv[1],'readonly')
 
 HS = {}
 for key in F.GetDirectory("calSi").GetListOfKeys():
-    ID = ''.join( filter( str.isdigit, key.GetName() ) )
+    ID = int(''.join( filter( str.isdigit, key.GetName() ) ))
     HS[ID] = key.ReadObj()
 
 Hdummy = HS.values()[0]
