@@ -1,0 +1,31 @@
+#!/usr/bin/python
+
+from __future__ import print_function
+
+import sys
+import subprocess
+import argparse
+
+def read_links(filename):
+    lines = open(filename).readlines()
+    links = filter(lambda line: line.startswith("http"), lines)
+    return tuple(links)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f", "--file", type=str, help="file with links")
+    parser.add_argument("-u", "--urls", type=str, nargs="*", help="urls")
+    parser.add_argument("--no-subs", action="store_true", help="do not store subs")
+
+    args = parser.parse_args(sys.argv[1:])
+    urls = args.urls
+    if args.file:
+        urls = urls + read_links(args.file)
+
+    subs   = "" if args.no_subs else "--all-subs"
+    format = "-f 136"
+
+    for url in urls:
+        command = "youtube-dl {url} {subs} {format}".format(**globals(), **locals())
+        print("running", command)
+        sp.call(command.split())
