@@ -2,30 +2,127 @@
 
 from __future__ import print_function
 
+import os
 import sys
-import subprocess
+import glob
+import shutil      as sh
 import argparse
+import subprocess  as sp
+import collections
+
+
+FORMAT_CODES = (
+    (       22 ,  "720p"),
+#    ((136, 140), "720p"),
+    (       37 , "1080p"),
+    (       18 ,  "360p"),
+    (        5 ,  "240p"),
+)
+
 
 def read_links(filename):
-    lines = open(filename).readlines()
-    links = filter(lambda line: line.startswith("http"), lines)
+    links = open(filename).readlines()
+    links = filter(lambda line: line.startswith("http"), links)
+    links =    map(lambda line: line.split(" ")[0]     , links)
     return tuple(links)
+
+
+def find_file():
+    videonames  = glob.glob("*.mp4" )
+    videonames += glob.glob("*.mkv" )
+    videonames += glob.glob("*.flv" )
+    videonames += glob.glob("*.webm")
+    return len(videonames)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--file", type=str, help="file with links")
-    parser.add_argument("-u", "--urls", type=str, nargs="*", help="urls")
-    parser.add_argument("--no-subs", action="store_true", help="do not store subs")
+    parser.add_argument("-f", "--file", type=str, help="file with links", default=None)
+    parser.add_argument("-u", "--urls", type=str, nargs="*", help="urls", default=())
+    parser.add_argument("-s", "--skip", type=str, nargs="*", help="skip", default=())
 
     args = parser.parse_args(sys.argv[1:])
+    print(args)
     urls = args.urls
     if args.file:
         urls = urls + read_links(args.file)
 
-    subs   = "" if args.no_subs else "--all-subs"
-    format = "-f 136"
+    for i, url in enumerate(map(str.strip, urls)):
+        folder = "folder_{i}".format(i=i)
+        os.mkdir(folder)
+        os.chdir(folder)
 
-    for url in urls:
-        command = "youtube-dl {url} {subs} {format}".format(**globals(), **locals())
-        print("running", command)
-        sp.call(command.split())
+        print("URL #{i} of {l}".format(i=i, l=len(urls)))
+        for format, _ in FORMAT_CODES:
+            command = "youtube-dl {url} --all-subs -f {format}"
+            command = command.format(url=url, format=format)
+            
+            print("running", command)
+
+            errored = False
+            skipped = False
+
+            try:
+                process = sp.Popen(command.split(), stdout=sp.PIPE, stderr=sp.PIPE)
+                while process.poll() is None:
+                    output = process.stdout.readline().strip()
+                    if output:
+                        print(output)
+
+                    if "ERROR" in output:
+                        print("Format code", format, "didn't work.")
+                        errored = True
+                        break
+                    if "Destination" in output:
+                        for skip in args.skip:
+                            if skip in output:
+                                print("Terminating because", skip)
+                                skipped = True
+                                process.kill()
+                                break
+
+                if not find_file():
+                    errored = True
+
+            except KeyboardInterrupt:
+                try:
+                    print("Hit again Ctrl-c to stop execution or return to skip this url")
+                    raw_input(">>>")
+                except KeyboardInterrupt:
+                    print("OK. exiting...")
+                    sys.exit()
+                
+            if errored: continue
+
+            break
+
+        if errored or skipped:
+            os.chdir("..")
+            sh.rmtree(folder)
+            print()
+            continue
+
+        print("Success!")
+        
+        videonames  = glob.glob("*.mp4" )
+        videonames += glob.glob("*.mkv" )
+        videonames += glob.glob("*.flv" )
+        videonames += glob.glob("*.webm")
+
+        os.chdir("..")
+
+        if len(videonames) != 1:
+            print("WARNING!")
+
+        for vname in videonames:
+            videoname = ".".join(vname.split(".")[:-1])[:-12]
+
+        print(repr(folder), "->", repr(videoname))
+        while True:
+            try:
+                sh.move(folder, videoname)
+                break
+            except sh.Error:
+                print(repr(videoname), "already exists. Adding trailing underscore...")
+                videoname += "_"
+                sh.move(folder, videoname)
