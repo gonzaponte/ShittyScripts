@@ -27,7 +27,7 @@ def read_links(filename):
     return tuple(links)
 
 
-def find_file():
+def find_video_file():
     videonames  = glob.glob("*.mp4" )
     videonames += glob.glob("*.mkv" )
     videonames += glob.glob("*.flv" )
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         for format, _ in FORMAT_CODES:
             command = "youtube-dl {url} --all-subs -f {format}"
             command = command.format(url=url, format=format)
-            
+
             print("running", command)
 
             errored = False
@@ -81,7 +81,7 @@ if __name__ == "__main__":
                                 process.kill()
                                 break
 
-                if not find_file():
+                if not find_video_file():
                     errored = True
 
             except KeyboardInterrupt:
@@ -91,7 +91,7 @@ if __name__ == "__main__":
                 except KeyboardInterrupt:
                     print("OK. exiting...")
                     sys.exit()
-                
+
             if errored: continue
 
             break
@@ -103,7 +103,7 @@ if __name__ == "__main__":
             continue
 
         print("Success!")
-        
+
         videonames  = glob.glob("*.mp4" )
         videonames += glob.glob("*.mkv" )
         videonames += glob.glob("*.flv" )
