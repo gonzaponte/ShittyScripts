@@ -5,6 +5,7 @@ from __future__ import print_function
 import os
 import sys
 import glob
+import random
 import shutil      as sh
 import argparse
 import subprocess  as sp
@@ -35,6 +36,11 @@ def find_video_file():
     return len(videonames)
 
 
+def random_string(length=6):
+    chars = string.ascii_letters + string.digits
+    return "".join(random.choice(chars) for _ in range(length))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", type=str, help="file with links", default=None)
@@ -48,7 +54,7 @@ if __name__ == "__main__":
         urls = urls + read_links(args.file)
 
     for i, url in enumerate(map(str.strip, urls)):
-        folder = "folder_{i}".format(i=i)
+        folder = "folder_{i}_{tag}".format(i=i, tag=random_string())
         os.mkdir(folder)
         os.chdir(folder)
 
