@@ -6,6 +6,7 @@ import os
 import sys
 import glob
 import random
+import string
 import shutil      as sh
 import argparse
 import subprocess  as sp
@@ -28,12 +29,12 @@ def read_links(filename):
     return tuple(links)
 
 
-def find_video_file():
-    videonames  = glob.glob("*.mp4" )
-    videonames += glob.glob("*.mkv" )
-    videonames += glob.glob("*.flv" )
-    videonames += glob.glob("*.webm")
-    return len(videonames)
+def get_video_files(folder="."):
+    videonames  = glob.glob(os.path.join(folder, "*.mp4" ))
+    videonames += glob.glob(os.path.join(folder, "*.mkv" ))
+    videonames += glob.glob(os.path.join(folder, "*.flv" ))
+    videonames += glob.glob(os.path.join(folder, "*.webm"))
+    return tuple(map(os.path.basename, videonames))
 
 
 def random_string(length=6):
@@ -41,94 +42,115 @@ def random_string(length=6):
     return "".join(random.choice(chars) for _ in range(length))
 
 
+def execute(command):
+    out, err = "", ""
+
+    try:
+        print("Running", command)
+        process = sp.Popen(command.split(), stdout=sp.PIPE, stderr=sp.PIPE)
+        while process.poll() is None:
+            pass
+        out, err = process.stdout, process.stderr
+
+    except KeyboardInterrupt:
+        try:
+            print("Hit again Ctrl-c to stop execution or return to skip this url")
+            raw_input(">>>")
+        except KeyboardInterrupt:
+            print("OK. exiting...")
+            sys.exit()
+
+    return out, err
+
+
+def get_video_title(url):
+    command  = "youtube-dl --get-title {url}".format(url=url)
+    out, err = map(file.read, execute(command))
+    title    = out.split("\n")[0]
+    return title, out, err
+
+
+def should_skip(title, skips):
+    for skip in skips:
+        if skip in title:
+            return True, skip
+    return False, None
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--file", type=str, help="file with links", default=None)
-    parser.add_argument("-u", "--urls", type=str, nargs="*", help="urls", default=())
-    parser.add_argument("-s", "--skip", type=str, nargs="*", help="skip", default=())
+    parser.add_argument("-f", "--file"   , type=str, help="file with links", default=None)
+    parser.add_argument("-o", "--output" , type=str, help="output folder"  , default="./")
+    parser.add_argument("-u", "--urls"   , type=str, nargs="*", help="urls", default=())
+    parser.add_argument("-s", "--skip"   , type=str, nargs="*", help="skip", default=())
+    parser.add_argument("-v", "--verbose", action="store_true")
 
     args = parser.parse_args(sys.argv[1:])
-    print(args)
+    if args.verbose:
+        print(args)
+
     urls = args.urls
     if args.file:
         urls = urls + read_links(args.file)
 
     for i, url in enumerate(map(str.strip, urls)):
-        folder = "folder_{i}_{tag}".format(i=i, tag=random_string())
+        print("URL #{i} of {l}".format(i=i, l=len(urls)))
+
+        tag    = random_string()
+        folder = "folder_{i}_{tag}".format(i=i, tag=tag)
         os.mkdir(folder)
         os.chdir(folder)
 
-        print("URL #{i} of {l}".format(i=i, l=len(urls)))
-        for format, _ in FORMAT_CODES:
-            command = "youtube-dl {url} --all-subs -f {format}"
-            command = command.format(url=url, format=format)
+        title, out, err = get_video_title(url)
+        skip, skip_word = should_skip(title, args.skip)
 
-            print("running", command)
+        print("Downloading", title)
+        if skip:
+            msg = "Skipping URL {url} because it contains word <{skip_word}>"
+            print(msg.format(**locals()))
+        else:
+            for formats, _ in FORMAT_CODES:
+                if isinstance(formats, int):
+                    formats = formats,
 
-            errored = False
-            skipped = False
+                errored = False
+                for j, format in enumerate(formats):
+                    if errored: break
 
-            try:
-                process = sp.Popen(command.split(), stdout=sp.PIPE, stderr=sp.PIPE)
-                while process.poll() is None:
-                    output = process.stdout.readline().strip()
-                    if output:
-                        print(output)
+                    command  = "youtube-dl {url} -f {format}"
+                    command += " --all-subs" if not j else ""
+                    command  = command.format(url=url, format=format)
+                    our, err = execute(command)
 
-                    if "ERROR" in output:
+                    if "ERROR" in out:
                         print("Format code", format, "didn't work.")
+                        if args.verbose:
+                            print("============OUT=============")
+                            print(out, "\n")
+                            print("============ERR=============")
+                            print(err, "\n")
                         errored = True
-                        break
-                    if "Destination" in output:
-                        for skip in args.skip:
-                            if skip in output:
-                                print("Terminating because", skip)
-                                skipped = True
-                                process.kill()
-                                break
 
-                if not find_video_file():
-                    errored = True
+                if not errored and len(get_video_files()):
+                    break
 
-            except KeyboardInterrupt:
-                try:
-                    print("Hit again Ctrl-c to stop execution or return to skip this url")
-                    raw_input(">>>")
-                except KeyboardInterrupt:
-                    print("OK. exiting...")
-                    sys.exit()
-
-            if errored: continue
-
-            break
-
-        if errored or skipped:
-            os.chdir("..")
+        os.chdir("..")
+        if skip or errored:
+            print("Removing folder", folder)
             sh.rmtree(folder)
             print()
             continue
 
         print("Success!")
 
-        videonames  = glob.glob("*.mp4" )
-        videonames += glob.glob("*.mkv" )
-        videonames += glob.glob("*.flv" )
-        videonames += glob.glob("*.webm")
-
-        os.chdir("..")
+        videonames = get_video_files(folder)
 
         if len(videonames) != 1:
-            print("WARNING!")
+            print("WARNING! More than one video file exists")
 
         for vname in videonames:
-            videoname = ".".join(vname.split(".")[:-1])[:-12]
+            videoname = ".".join(vname.split(".")[:-1])[:-12] + " - " + tag
+            videoname = os.path.join(args.output, videoname)
 
-        print(repr(folder), "->", repr(videoname))
-        while True:
-            try:
-                sh.move(folder, videoname)
-                break
-            except sh.Error:
-                print(repr(videoname), "already exists. Adding trailing underscore...")
-                videoname += "_"
-                sh.move(folder, videoname)
+        print("Renaming folder", repr(folder), " to ", repr(videoname))
+        sh.move(folder, videoname)
