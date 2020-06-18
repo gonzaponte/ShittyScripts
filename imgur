@@ -1,0 +1,12 @@
+#!/usr/bin/python
+
+from __future__ import print_function
+import sys
+
+inputstr = sys.argv[1]
+outputstr = "http://i.imgur.com/{0}.jpg"
+
+ID = inputstr.split("/")[-1]
+if "?" in ID:
+    ID = ID[:ID.index("?")]
+print(outputstr.format(ID))
