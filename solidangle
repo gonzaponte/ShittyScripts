@@ -1,0 +1,16 @@
+#!/usr/bin/python
+
+import sys
+import random
+
+radius, distance = map(float, sys.argv[1:])
+
+N = 1000000
+n = 0
+
+for i in xrange(N):
+    costh = random.random()
+    rho   = distance / costh * (1 - costh**2)**0.5
+    n    += int(rho <= radius)
+
+print n * 0.5  / N
