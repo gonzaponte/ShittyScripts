@@ -1,0 +1,42 @@
+#!/usr/bin/python
+
+from __future__ import print_function
+
+import os
+import pwd
+import grp
+import sys
+import glob
+import shutil
+import subprocess
+
+assert len(sys.argv) > 2, "Wrong number of arguments. Usage: cpch input1 [input2, ...] output"
+
+inputs, output_folder = sys.argv[1:-1], sys.argv[-1]
+
+def copy_inputs(srcs, dst):
+    for src in srcs:
+        full_dst = os.path.join(dst, os.path.basename(src))
+        print("Copying" , src     , "\nto     ", full_dst)
+        shutil.copy (src, full_dst)
+
+        print("Chowning", full_dst, "to", "gonzalo")
+        uid = pwd.getpwnam("gonzalo").pw_uid
+        gid = grp.getgrnam("gonzalo").gr_gid
+        os.chown(full_dst, uid, gid)
+
+        print("Chmoding", full_dst, "to", "777")
+        os    .chmod(full_dst, 0o777)
+
+
+for input in inputs:
+    if not os.path.exists(input):
+        raise ValueError("Path " + input + " does not exist")
+
+    if os.path.isdir(input):
+        new_folder = os.path.join(output_folder, os.path.basename(os.path.normpath(input)))
+        print("Making dir", new_folder)
+        os.mkdir(new_folder)
+        copy_inputs(sorted(glob.glob(input + "/*")), new_folder)
+    else:
+        copy_inputs((input,), output_folder)
