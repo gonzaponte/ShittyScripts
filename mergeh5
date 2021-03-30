@@ -48,8 +48,10 @@ if __name__ == "__main__":
     tb.copy_file(first, args.output_file, overwrite=args.overwrite)
 
     to_index = {}
+    nfiles   = len(rest) + 1
     with tb.open_file(args.output_file, "a") as h5out:
-        for filename in rest:
+        for i, filename in enumerate(rest, start=2):
+            print(f"File #{i} of {nfiles}", end="\r", flush=True)
             with tb.open_file(filename) as h5in:
                 for node_out in filter(is_leaf, h5out.walk_nodes()):
                     path_tokens = node_out._v_pathname.split("/")[1:]
