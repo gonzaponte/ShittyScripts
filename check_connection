@@ -1,0 +1,10 @@
+#!/bin/bash
+wget -q --tries=10 --timeout=20 --spider http://google.com
+dt=$(date +%Y%m%d_%H%M%S)
+
+if [[ $? -eq 0 ]]; then
+    echo "$dt:Online"
+else
+    echo "$dt:Offline"
+#    mail -s "Internet connection lost on $(hostname) at $(date)" 
+fi
