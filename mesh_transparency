@@ -1,0 +1,70 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import math
+import random
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-p", "--pitch"   , type=float)
+parser.add_argument("-d", "--diameter", type=float)
+parser.add_argument("-n", "--nrandom" , type=int  , default=1, help="in millions")
+parser.add_argument("-z", "--delta-z" , type=float)
+parser.add_argument(      "--zmin"    , type=float, default=0)
+parser.add_argument(      "--normal"  , action="store_true")
+
+args = parser.parse_args()
+
+pitch = args.pitch
+wdiam = args.diameter
+wrad  = wdiam/2
+
+zmin = args.zmin
+zmax = args.delta_z + zmin
+
+nhit  = 0
+nshot = args.nrandom * 10**6
+
+for _ in xrange(nshot):
+    x0 = random.uniform(-3*pitch/2, 3*pitch/2)
+    y0 = random.uniform(-3*pitch/2, 3*pitch/2)
+    z0 = random.uniform(zmin, zmax)
+
+    if args.normal:
+        x = 0
+        y = 0
+        z = 0
+    else:
+        costheta = random.uniform(0, 1)
+        phi      = random.uniform(0, 1) * 2 * math.pi
+
+        x = z0/costheta * (1 - costheta)**2 * math.cos(phi)
+        y = x * math.tan(phi)
+        z = 0
+
+    x += x0
+    y += y0
+
+    eps_x = x % pitch
+    eps_y = y % pitch
+
+    hit_x = eps_x < wrad or eps_x - pitch > -wrad
+    hit_y = eps_y < wrad or eps_y - pitch > -wrad
+    if hit_x or hit_y:
+        nhit += 1
+
+nhit_u = math.sqrt(nhit)
+
+transparency   = (1 - nhit   * 1.0 / nshot) * 100
+transparency_u = (    nhit_u * 1.0 / nshot) * 100
+
+ndigits = int(math.floor(math.log10(nhit_u))) + 1
+ndigits = filter(lambda x: x[1] != "0",  enumerate(str(transparency_u) + "xxx"))
+ndigits = ndigits[1][0] + 1 - 1 # take into account the index of the period
+    
+transparency   = round(transparency  , ndigits)
+transparency_u = round(transparency_u, ndigits)
+
+print "Number of randoms: {0}".format(nshot)
+print "Number of hits   : {0} ({1} %)".format(nhit, 100 - transparency)
+print "Transparency     : ({0} ± {1}) %".format(transparency, transparency_u)
