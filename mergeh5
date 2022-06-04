@@ -6,6 +6,7 @@ import glob
 import argparse
 
 from functools import reduce
+from functools import lru_cache
 
 import tables as tb
 
@@ -35,28 +36,66 @@ def flatten(items):
     return flattened
 
 
+def node_ignorer(keep, ignore):
+    @lru_cache()
+    def ignore_node(path_to_node):
+        if keep:
+            for path_to_keep in keep:
+                pairs = zip( path_to_node.split("/")
+                           , path_to_keep.split("/")
+                           )
+                if all(a==b for a,b in pairs):
+                    return False
+            return True
+
+        if ignore:
+            for path_to_ignore in ignore:
+                pairs = zip( path_to_node  .split("/")
+                           , path_to_ignore.split("/")
+                           )
+                if all(a==b for a,b in pairs):
+                    return True
+            return False
+        return False
+    return ignore_node
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("input_files_or_path", type=parse_path, nargs="*")
-    parser.add_argument("-o", "--output-file", default="merged.h5")
-    parser.add_argument("--overwrite", action="store_true")
-    
-    args = parser.parse_args(sys.argv[1:])
+    parser.add_argument("input_files_or_path", type=os.path.abspath, nargs="*")
+    parser.add_argument("-o", "--output-file",                                  default="merged.h5")
+    parser.add_argument("-m", "--max-files"  , type=int            ,            default=-1)
+    parser.add_argument(      "--keep"       , type=str            , nargs="*", default=())
+    parser.add_argument(      "--ignore"     , type=str            , nargs="*", default=())
+    parser.add_argument(      "--overwrite"  , action="store_true" )
 
-    first, *rest = flatten(args.input_files_or_path)
+    args = parser.parse_args(sys.argv[1:])
+    for arg, value in args._get_kwargs():
+        print("{arg} : {value}".format(arg=arg, value=value))
+
+    first, *rest = flatten(map(parse_path, args.input_files_or_path))
+
+    ignore_node = node_ignorer(args.keep, args.ignore)
 
     tb.copy_file(first, args.output_file, overwrite=args.overwrite)
 
     to_index = {}
-    nfiles   = len(rest) + 1
+    nfiles   = args.max_files if args.max_files > 0 else len(rest) + 1
     with tb.open_file(args.output_file, "a") as h5out:
         for i, filename in enumerate(rest, start=2):
+            if i>nfiles: break
+
             print(f"File #{i} of {nfiles}", end="\r", flush=True)
             with tb.open_file(filename) as h5in:
                 for node_out in filter(is_leaf, h5out.walk_nodes()):
-                    path_tokens = node_out._v_pathname.split("/")[1:]
-                    node_in     = reduce(getattr, path_tokens, h5in.root)
+                    if ignore_node(node_out._v_pathname):
+                        continue
 
+                    path_tokens = node_out._v_pathname.split("/")[1:]
+                    try:
+                        node_in = reduce(getattr, path_tokens, h5in.root)
+                    except:
+                        continue
                     node_out.append(node_in[:])
 
                     if is_indexed_table(node_in):
@@ -69,3 +108,7 @@ if __name__ == "__main__":
 
 
         h5out.flush()
+
+        for node_out in filter(is_leaf, h5out.walk_nodes()):
+            if ignore_node(node_out._v_pathname):
+                h5out.remove_node(node_out)
