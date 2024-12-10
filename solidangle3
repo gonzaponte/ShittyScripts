@@ -1,0 +1,56 @@
+#!/usr/bin/python3
+
+import sys
+import math
+import random
+import argparse
+
+class Shape:
+    circle = "circle"
+    square = "square"
+
+def shapes(s):
+    try:
+        return getattr(Shape, s)
+    except:
+        raise ValueError("{} is not a valid shape. Options are: {}".format(s, list(Shape)))
+
+def to_int(x):
+    return int(eval(x))
+
+parser = argparse.ArgumentParser()
+parser.add_argument("size"           , type=float, help="radius for circle, length for square")
+parser.add_argument("distance"       , type=float)
+parser.add_argument("-s", "--shape"  , type=shapes)
+parser.add_argument("-n", "--nphot"  , type=to_int, default=10**6)
+
+args = parser.parse_args(sys.argv[1:])
+
+size = args.size if args.shape == Shape.circle else args.size/2.0
+dist = args.distance
+
+N = args.nphot
+n = 0
+
+for i in range(N):
+    costh = random.random()
+    rho   = dist / costh * (1 - costh**2)**0.5
+    if args.shape == Shape.circle:
+        hit = rho <= size
+    elif args.shape == Shape.square:
+        phi = random.random() * 2 * math.pi
+        x   = rho * math.cos(phi)
+        y   = rho * math.sin(phi)
+
+        hit = abs(x) < size and abs(y) < size
+
+    n += int(hit)
+
+sa   = n      * 0.5  / N
+sa_u = n**0.5 * 0.5 / N
+
+print("Total    number of photons {}".format(N))
+print("Detected number of photons {}".format(n))
+print("Fraction  : ({:.5e} +- {:.5e})   ".format(sa, sa_u))
+print("Percentage: ({:.5f} +- {:.5f})  %".format(sa * 100, sa_u * 100))
+print("Absolute  : ({:.5f} +- {:.5f}) sr".format(sa * 4 * math.pi, sa_u * 4 * math.pi))
